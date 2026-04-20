@@ -87,7 +87,7 @@ public class ChatServiceImpl implements ChatService {
     @Override
     public Flux<String> streamChat(String query) {
         
-        return ollamChatClient
+        return openAiChatClient
                 .prompt()
                 .system(system-> system.text(systemMessage))
                 .user(user -> user.text(userMessage).param("concept",query))
