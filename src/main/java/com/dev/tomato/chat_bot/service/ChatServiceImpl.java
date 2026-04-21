@@ -1,21 +1,16 @@
 package com.dev.tomato.chat_bot.service;
 
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SafeGuardAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-
-import com.dev.tomato.chat_bot.advisor.TokenPrintAdvisor;
 
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
@@ -25,11 +20,22 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    @Qualifier("openAiChatClient")
-    private final ChatClient openAiChatClient;
-    @Qualifier("geminiChatClient")
-    private final ChatClient geminiChatClient;
-    private final ChatClient ollamChatClient;
+
+/*  ---  use following commented models if using multiple clients with respecitve qualifiers.    -------*/
+
+    // @Qualifier("openAiChatClient")
+    // private final ChatClient openAiChatClient;
+    // @Qualifier("geminiChatClient")
+    // private final ChatClient geminiChatClient;
+    // private final ChatClient ollamChatClient;
+
+
+/* ----   use single default chat client as default if not using multiple chat models -------*/
+
+    private final ChatClient chatClient;
+
+
+/*----- Resources from text file for prompts  ------ */
 
     @Value("classpath:prompts/system-message.st")
     private Resource systemMessage;
@@ -39,12 +45,12 @@ public class ChatServiceImpl implements ChatService {
 
 
     @Override
-    public String chat(String query) {
+    public String chat(String query, String userId) {
         
 
-        return ollamChatClient
+        return chatClient
                 .prompt()
-                .advisors(new TokenPrintAdvisor(), new SafeGuardAdvisor(List.of("game")))
+                .advisors( advisorSpec -> advisorSpec.param(ChatMemory.CONVERSATION_ID, userId))
                 .system(system -> system.text(this.systemMessage))
                 .user(user -> user.text(userMessage).param("concept", query))
                 .options(ChatOptions.builder()
@@ -77,7 +83,7 @@ public class ChatServiceImpl implements ChatService {
         var systemMessage= systemPromptTemplate.createMessage();
 
         Prompt prompt= new Prompt(systemMessage , userMessage );
-        return openAiChatClient
+        return chatClient
                 .prompt(prompt)
                 .call() 
                 .content();
@@ -85,11 +91,12 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public Flux<String> streamChat(String query) {
+    public Flux<String> streamChat(String query, String userId) {
         
-        return openAiChatClient
+        return chatClient
                 .prompt()
-                .system(system-> system.text(systemMessage))
+                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, userId))
+                // .system(system-> system.text(systemMessage))
                 .user(user -> user.text(userMessage).param("concept",query))
                 .options(ChatOptions.builder()
                     .maxTokens(300)
